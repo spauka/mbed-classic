@@ -22,7 +22,7 @@
 #define PWM_CHANNELS            3
 #define PWM_VALUE_INVALID       0xFFFF
 
-#define PWM_PERIOD_DEFAULT      20000
+#define PWM_PERIOD_DEFAULT      2000
 
 // use the last timer Capture/Compare channel to define the period.
 #define TIMER_PERIOD_CC         3
@@ -61,10 +61,15 @@ void TIMER2_IRQHandler(void)
     timer->TASKS_STOP = 1;
 
     // update the CC values of all channels.
-    for (int i=0; i<PWM_CHANNELS; i++)
+    for (int i=0; i<PWM_CHANNELS; i++) {
         timer->CC[i] = pwm_ticks[i];
+        if (pwm_pins[i] != NC) {
+            NRF_PPI->CHENSET = (1 << i) | (1 << (i + 1));
+        }
+    }
 
     // Disable this interrupt - it is needed only when PWM values change.
+    timer->TASKS_CLEAR = 1;
     timer->SHORTS = TIMER_SHORTS_COMPARE3_CLEAR_Msk;
     timer->INTENCLR = TIMER_INTENCLR_COMPARE3_Msk;
     timer->PRESCALER = pwm_prescaler;
@@ -187,7 +192,7 @@ static void pwm_connect(PinName pin, uint8_t gpiote_channel)
      NRF_GPIOTE->CONFIG[gpiote_channel] = (GPIOTE_CONFIG_MODE_Task << GPIOTE_CONFIG_MODE_Pos) |
                                           ((uint32_t)pin << GPIOTE_CONFIG_PSEL_Pos) |
                                           ((uint32_t)GPIOTE_CONFIG_POLARITY_Toggle << GPIOTE_CONFIG_POLARITY_Pos) |
-                                          ((uint32_t)GPIOTE_CONFIG_OUTINIT_High << GPIOTE_CONFIG_OUTINIT_Pos); // ((uint32_t)GPIOTE_CONFIG_OUTINIT_High <<
+                                          ((uint32_t)GPIOTE_CONFIG_OUTINIT_Low << GPIOTE_CONFIG_OUTINIT_Pos); // ((uint32_t)GPIOTE_CONFIG_OUTINIT_High <<
                                                                                                               // GPIOTE_CONFIG_OUTINIT_Pos);//
 
      /* Three NOPs are required to make sure configuration is written before setting tasks or getting events */
@@ -206,7 +211,7 @@ static void pwm_connect(PinName pin, uint8_t gpiote_channel)
      NRF_PPI->CH[ppi_channel+1].TEP = (uint32_t)&NRF_GPIOTE->TASKS_OUT[gpiote_channel];
      NRF_PPI->CH[ppi_channel+1].EEP = (uint32_t)&timer->EVENTS_COMPARE[TIMER_PERIOD_CC];
 
-     NRF_PPI->CHENSET = (1 << ppi_channel) | (1 << (ppi_channel + 1));
+     NRF_PPI->CHENCLR = (1 << ppi_channel) | (1 << (ppi_channel + 1));
  }
 
 
